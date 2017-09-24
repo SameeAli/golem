@@ -1,5 +1,7 @@
 from mock import patch, MagicMock
 
+from ethereum.keys import PBKDF2_CONSTANTS
+
 from golem import testutils
 from golem.tools.assertlogs import LogTestCase
 from golem.tools.testwithdatabase import TestWithDatabase
@@ -7,7 +9,7 @@ from golem.transactions.ethereum.ethereumtransactionsystem import (
     EthereumTransactionSystem
 )
 
-PRIV_KEY = '07' * 32
+PBKDF2_CONSTANTS['c'] = 10  # Limit KDF difficulty.
 
 
 class TestEthereumTransactionSystem(TestWithDatabase, LogTestCase,
@@ -15,16 +17,16 @@ class TestEthereumTransactionSystem(TestWithDatabase, LogTestCase,
     PEP8_FILES = ['golem/transactions/ethereum/ethereumtransactionsystem.py', ]
 
     def test_init(self):
-        e = EthereumTransactionSystem(self.tempdir, PRIV_KEY)
+        e = EthereumTransactionSystem(self.tempdir, 'password')
         self.assertIsInstance(e, EthereumTransactionSystem)
         assert type(e.get_payment_address()) is str
 
-    def test_invalid_private_key(self):
+    def test_invalid_account_password(self):
         with self.assertRaises(ValueError):
-            EthereumTransactionSystem(self.tempdir, "not a private key")
+            EthereumTransactionSystem(self.tempdir, "")
 
     def test_get_balance(self):
-        e = EthereumTransactionSystem(self.tempdir, PRIV_KEY)
+        e = EthereumTransactionSystem(self.tempdir, 'password')
         assert e.get_balance() == (None, None, None)
 
     @patch('golem.ethereum.paymentprocessor.PaymentProcessor.start')
@@ -43,7 +45,7 @@ class TestEthereumTransactionSystem(TestWithDatabase, LogTestCase,
         def error(*_):
             raise Exception
 
-        e = EthereumTransactionSystem(self.tempdir, PRIV_KEY)
+        e = EthereumTransactionSystem(self.tempdir, 'password')
 
         sleep.call_count = 0
         with patch('golem.ethereum.Client.is_syncing', side_effect=false):
@@ -64,10 +66,11 @@ class TestEthereumTransactionSystem(TestWithDatabase, LogTestCase,
 
         pkg = 'golem.ethereum.'
 
-        def init(self, *args, **kwargs):
+        def init(self, datadir):
             self.rpcport = 65001
             self._NodeProcess__ps = None
             self.web3 = MagicMock()
+            self.datadir = datadir
 
         with patch(pkg + 'paymentprocessor.PaymentProcessor.start'), \
                 patch(pkg + 'paymentprocessor.PaymentProcessor.stop'), \
@@ -76,7 +79,7 @@ class TestEthereumTransactionSystem(TestWithDatabase, LogTestCase,
                 patch(pkg + 'node.NodeProcess.__init__', init), \
                 patch('web3.providers.rpc.HTTPProvider.__init__', init):
 
-            e = EthereumTransactionSystem(self.tempdir, PRIV_KEY)
+            e = EthereumTransactionSystem(self.tempdir, 'password')
 
             assert e._EthereumTransactionSystem__proc.start.called
             assert e._EthereumTransactionSystem__eth_node.node.start.called
